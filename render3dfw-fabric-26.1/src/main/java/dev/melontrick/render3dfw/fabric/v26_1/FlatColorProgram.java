@@ -181,7 +181,7 @@ final class FlatColorProgram implements FabricProgram {
     private static RenderPipeline createPipeline(PipelineKey key) {
         boolean lines = key.stream() == PrimitiveStream.LINES;
         RenderPipeline.Builder builder = RenderPipeline.builder()
-                .withLocation(Identifier.fromNamespaceAndPath("render3d", key.path()))
+                .withLocation(Identifier.fromNamespaceAndPath("render3dfw", key.path()))
                 .withUniform(DYNAMIC_TRANSFORMS, UniformType.UNIFORM_BUFFER)
                 .withUniform(PROJECTION, UniformType.UNIFORM_BUFFER)
                 .withVertexShader(lines ? "core/rendertype_lines" : "core/position_color")

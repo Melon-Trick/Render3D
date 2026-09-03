@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "id": "render3d",
+  "id": "render3dfw",
   "version": "${version}",
-  "name": "Render3D",
-  "description": "Fabric 26.1 adapter for the engine-independent Render3D framework.",
+  "name": "Render3DFW",
+  "description": "Fabric 26.1 adapter for the engine-independent Render3DFW framework.",
   "environment": "client",
   "entrypoints": {
     "client": [

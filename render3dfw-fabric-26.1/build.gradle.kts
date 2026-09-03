@@ -4,7 +4,7 @@ plugins {
 }
 
 base {
-    archivesName = "render3d-fabric-26.1"
+    archivesName = "render3dfw-fabric-26.1"
 }
 
 dependencies {
@@ -12,12 +12,9 @@ dependencies {
     implementation("net.fabricmc:fabric-loader:${property("fabric_loader_version")}")
     implementation("net.fabricmc.fabric-api:fabric-api:${property("fabric_api_version")}")
 
-    api(project(":"))
-    include(project(":"))
-
-    testImplementation(platform("org.junit:junit-bom:5.13.4"))
-    testImplementation("org.junit.jupiter:junit-jupiter")
-    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+    api(project(":render3dfw-engine"))
+    include(project(":render3dfw-api"))
+    include(project(":render3dfw-engine"))
 }
 
 tasks.processResources {

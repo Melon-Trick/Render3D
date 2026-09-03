@@ -1,32 +1,35 @@
-# Render3D
+# Render3DFW
 
-Render3D is a Java 25 framework for high-volume 3D debugging overlays. Its model, scene,
-culling, LOD, cache and batching code are engine-independent. Minecraft integration lives in a
-strictly separate adapter for each supported Fabric/Minecraft version.
+Render3DFW is a modular Java 25 framework for high-volume 3D debugging overlays. Its public
+contracts, geometry engine, scene processing, cache and batching remain independent from
+Minecraft. Every supported Minecraft version lives in its own adapter module.
 
 ## Modules
 
-- `render3d-core` (the root project): pure Java, with no Minecraft, Fabric, LWJGL or rendering API
-  dependency.
-- `fabric-26.1`: the minimal Minecraft 26.1 hook and native program implementations. Its default
-  flat-color program uses consolidated line/triangle streams,
-  camera-relative vertices, cached pipeline variants and at most two draws per state bucket.
+- `render3dfw-api`: public render contracts, immutable primitive models and engine-independent
+  math types. It has no runtime dependency outside the JDK.
+- `render3dfw-engine`: shape compilation, automatic registration, geometry caching, culling, LOD,
+  draw budgets, state batching and lock-free scene snapshots. It depends only on
+  `render3dfw-api`.
+- `render3dfw-fabric-26.1`: the minimal Minecraft 26.1 hooks and native GPU backend. Its output JAR
+  embeds both agnostic modules for Fabric consumers.
 
-The next Minecraft version should add another sibling adapter (`fabric-<version>`) rather than
-changing core contracts.
+The root project is an aggregator, following the same modular convention as AstralByte. A new
+Minecraft version adds a sibling `render3dfw-fabric-<version>` module without changing the API or
+engine solely for platform churn.
 
-## Core design
+## Engine design
 
 - immutable primitive models and custom `Shape3d` support;
 - automatic shape compiler discovery through `ServiceLoader`;
 - weighted LRU geometry cache, independently of instance color and placement;
-- distance/detail/frustum culling and command/index budgets;
+- distance, detail and frustum culling with command and index budgets;
 - automatic LOD for procedural geometry;
 - state buckets keyed by program, depth, blend and cull modes;
 - lock-free immutable scene snapshots for render-thread reads.
 
-The core runtime classpath is empty: the produced core JAR resolves only to the JDK's `java.base`
-module. Minecraft classes occur exclusively under `fabric-26.1`.
+The API and engine classpaths contain no Minecraft, Fabric, LWJGL or rendering API dependency.
+Minecraft classes occur exclusively under `render3dfw-fabric-26.1`.
 
 ## Minimal use from Fabric 26.1
 

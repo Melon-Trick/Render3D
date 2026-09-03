@@ -13,6 +13,8 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "render3d"
+rootProject.name = "Render3DFW"
 
-include("fabric-26.1")
+include("render3dfw-api")
+include("render3dfw-engine")
+include("render3dfw-fabric-26.1")
