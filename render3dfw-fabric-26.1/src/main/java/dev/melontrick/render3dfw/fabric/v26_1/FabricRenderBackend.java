@@ -11,6 +11,9 @@ import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
 public final class FabricRenderBackend {
+    private static final double POSITION_QUANTUM = 0.125;
+    private static final double ROTATION_QUANTUM = 0.5;
+
     private final Render3DSystem system;
     private final FabricProgramRegistry programs;
     private volatile RenderFrame extractedFrame = RenderFrame.empty();
@@ -29,10 +32,18 @@ public final class FabricRenderBackend {
         LevelRenderEvents.END_EXTRACTION.register(context -> {
             Vec3 camera = context.camera().position();
             Frustum frustum = context.levelState().cameraRenderState.cullFrustum;
-            CameraView view = new CameraView(
-                    new Vec3d(camera.x(), camera.y(), camera.z()),
+            Vec3d cameraPosition = new Vec3d(camera.x(), camera.y(), camera.z());
+            long reuseKey = CameraView.quantizedKey(
+                    cameraPosition,
+                    context.camera().yaw(),
+                    context.camera().xRot(),
+                    POSITION_QUANTUM,
+                    ROTATION_QUANTUM);
+            CameraView view = CameraView.reusable(
+                    cameraPosition,
                     (minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ) -> frustum == null
-                            || frustum.isVisible(new AABB(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ)));
+                            || frustum.isVisible(new AABB(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ)),
+                    reuseKey);
             extractedFrame = system.compile(view);
         });
         LevelRenderEvents.END_MAIN.register(context -> {

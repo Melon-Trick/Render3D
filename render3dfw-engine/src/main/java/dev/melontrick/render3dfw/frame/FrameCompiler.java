@@ -135,7 +135,8 @@ public final class FrameCompiler {
                 culledAt - startedAt,
                 geometryPreparedAt - culledAt,
                 batchedAt - geometryPreparedAt,
-                batchedAt - startedAt);
+                batchedAt - startedAt,
+                false);
         return new RenderFrame(batches, stats);
     }
 

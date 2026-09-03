@@ -15,4 +15,25 @@ public record RenderFrameStats(
         long cullingNanos,
         long geometryNanos,
         long batchingNanos,
-        long compilationNanos) {}
+        long compilationNanos,
+        boolean reusedFrame) {
+    public RenderFrameStats asReused() {
+        return new RenderFrameStats(
+                submittedCommands,
+                renderedCommands,
+                detailCulledCommands,
+                distanceCulledCommands,
+                frustumCulledCommands,
+                budgetCulledCommands,
+                spatiallyTestedCommands,
+                spatiallyPrunedCommands,
+                spatialNodesTested,
+                renderedIndices,
+                batches,
+                0L,
+                0L,
+                0L,
+                0L,
+                true);
+    }
+}

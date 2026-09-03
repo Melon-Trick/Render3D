@@ -11,6 +11,10 @@ public record RenderFrame(List<RenderBatch> batches, RenderFrameStats stats) {
     }
 
     public static RenderFrame empty() {
-        return new RenderFrame(List.of(), new RenderFrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0L, 0L, 0L, 0L));
+        return new RenderFrame(List.of(), new RenderFrameStats(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0L, 0L, 0L, 0L, false));
+    }
+
+    public RenderFrame asReused() {
+        return stats.reusedFrame() ? this : new RenderFrame(batches, stats.asReused());
     }
 }
