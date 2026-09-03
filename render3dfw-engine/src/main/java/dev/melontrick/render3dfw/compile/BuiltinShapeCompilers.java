@@ -14,11 +14,11 @@ final class BuiltinShapeCompilers {
     private BuiltinShapeCompilers() {}
 
     static void registerInto(ShapeRegistry registry) {
-        registry.register(Line3d.class, BuiltinShapeCompilers::line);
-        registry.register(Triangle3d.class, BuiltinShapeCompilers::triangle);
-        registry.register(Box3d.class, BuiltinShapeCompilers::box);
-        registry.register(Polyline3d.class, BuiltinShapeCompilers::polyline);
-        registry.register(Mesh3d.class, BuiltinShapeCompilers::mesh);
+        registry.registerInvariant(Line3d.class, BuiltinShapeCompilers::line);
+        registry.registerInvariant(Triangle3d.class, BuiltinShapeCompilers::triangle);
+        registry.registerInvariant(Box3d.class, BuiltinShapeCompilers::box);
+        registry.registerInvariant(Polyline3d.class, BuiltinShapeCompilers::polyline);
+        registry.registerInvariant(Mesh3d.class, BuiltinShapeCompilers::mesh);
         registry.register(Sphere3d.class, BuiltinShapeCompilers::sphere);
     }
 

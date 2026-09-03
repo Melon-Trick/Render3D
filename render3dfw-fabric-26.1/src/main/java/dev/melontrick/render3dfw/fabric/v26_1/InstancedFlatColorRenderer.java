@@ -93,6 +93,12 @@ final class InstancedFlatColorRenderer implements AutoCloseable {
     }
 
     private List<InstanceGroup> groups(RenderBatch batch, PrimitiveStream stream) {
+        if (batch.hasUniformGeometry() && batch.hasUniformShapeMode()) {
+            boolean visible = stream == PrimitiveStream.LINES
+                    ? batch.uniformShapeMode().lines()
+                    : batch.uniformShapeMode().fill();
+            return visible ? List.of(InstanceGroup.contiguous(batch.uniformGeometry(), batch.size())) : List.of();
+        }
         Map<CompiledShape, InstanceGroup> byGeometry = new IdentityHashMap<>();
         List<InstanceGroup> result = new ArrayList<>();
         for (int instance = 0; instance < batch.size(); instance++) {
@@ -360,11 +366,21 @@ final class InstancedFlatColorRenderer implements AutoCloseable {
 
     private static final class InstanceGroup {
         private final CompiledShape geometry;
-        private int[] instances = new int[16];
+        private int[] instances;
         private int size;
 
         private InstanceGroup(CompiledShape geometry) {
             this.geometry = geometry;
+            instances = new int[16];
+        }
+
+        private InstanceGroup(CompiledShape geometry, int size) {
+            this.geometry = geometry;
+            this.size = size;
+        }
+
+        private static InstanceGroup contiguous(CompiledShape geometry, int size) {
+            return new InstanceGroup(geometry, size);
         }
 
         private void add(int instance) {
@@ -379,7 +395,7 @@ final class InstancedFlatColorRenderer implements AutoCloseable {
         }
 
         private int instance(int index) {
-            return instances[index];
+            return instances == null ? index : instances[index];
         }
 
         private int size() {

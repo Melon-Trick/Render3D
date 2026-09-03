@@ -1,6 +1,8 @@
 package dev.melontrick.render3dfw.scene;
 
 import dev.melontrick.render3dfw.api.RenderCommand;
+import dev.melontrick.render3dfw.api.RenderStyle;
+import dev.melontrick.render3dfw.api.ShapeMode;
 import dev.melontrick.render3dfw.frame.CameraView;
 import dev.melontrick.render3dfw.frame.RenderSettings;
 import dev.melontrick.render3dfw.frame.VisibilityTest;
@@ -24,9 +26,16 @@ public final class SceneSnapshot {
     private final double[] maximumX;
     private final double[] maximumY;
     private final double[] maximumZ;
+    private final double[] centerX;
+    private final double[] centerY;
+    private final double[] centerZ;
     private final int[] order;
     private final Node root;
     private final IndexStats indexStats;
+    private final double minimumCommandDistance;
+    private final RenderCommand uniformCommand;
+    private final RenderStyle uniformStyle;
+    private final ShapeMode uniformShapeMode;
 
     private SceneSnapshot(RenderCommand[] commands) {
         long startedAt = System.nanoTime();
@@ -38,10 +47,27 @@ public final class SceneSnapshot {
         maximumX = new double[commands.length];
         maximumY = new double[commands.length];
         maximumZ = new double[commands.length];
+        centerX = new double[commands.length];
+        centerY = new double[commands.length];
+        centerZ = new double[commands.length];
         order = new int[commands.length];
 
+        double minimumDistance = Double.POSITIVE_INFINITY;
+        RenderCommand representative = null;
+        boolean uniform = true;
+        boolean styleUniform = true;
+        boolean shapeModeUniform = true;
         for (int index = 0; index < commands.length; index++) {
             RenderCommand command = Objects.requireNonNull(commands[index], "command");
+            if (representative == null) {
+                representative = command;
+            } else {
+                uniform &= command.shape() == representative.shape()
+                        && command.state().equals(representative.state());
+                styleUniform &= command.style() == representative.style();
+                shapeModeUniform &=
+                        command.style().shapeMode() == representative.style().shapeMode();
+            }
             Bounds3d bounds = command.shape().bounds();
             Vec3d translation = command.translation();
             minimumX[index] = bounds.minimum().x() + translation.x();
@@ -50,8 +76,18 @@ public final class SceneSnapshot {
             maximumX[index] = bounds.maximum().x() + translation.x();
             maximumY[index] = bounds.maximum().y() + translation.y();
             maximumZ[index] = bounds.maximum().z() + translation.z();
+            centerX[index] = (minimumX[index] + maximumX[index]) * 0.5;
+            centerY[index] = (minimumY[index] + maximumY[index]) * 0.5;
+            centerZ[index] = (minimumZ[index] + maximumZ[index]) * 0.5;
+            minimumDistance = Math.min(minimumDistance, command.maxDistance());
             order[index] = index;
         }
+        minimumCommandDistance = minimumDistance;
+        uniformCommand = uniform && representative != null ? representative : null;
+        uniformStyle = styleUniform && representative != null ? representative.style() : null;
+        uniformShapeMode = shapeModeUniform && representative != null
+                ? representative.style().shapeMode()
+                : null;
 
         IndexBuilder builder = new IndexBuilder();
         root = commands.length == 0 ? null : builder.build(0, commands.length);
@@ -82,6 +118,18 @@ public final class SceneSnapshot {
         return indexStats;
     }
 
+    public RenderCommand uniformCommand() {
+        return uniformCommand;
+    }
+
+    public RenderStyle uniformStyle() {
+        return uniformStyle;
+    }
+
+    public ShapeMode uniformShapeMode() {
+        return uniformShapeMode;
+    }
+
     public QueryStats collectVisible(
             CameraView camera, RenderSettings settings, VisibleCommandConsumer visibleCommands) {
         Objects.requireNonNull(camera, "camera");
@@ -89,7 +137,11 @@ public final class SceneSnapshot {
         Objects.requireNonNull(visibleCommands, "visibleCommands");
         MutableQueryStats stats = new MutableQueryStats();
         if (root != null) {
-            collect(root, camera, settings, visibleCommands, stats);
+            if (isFullyVisible(camera, settings)) {
+                collectAll(camera, visibleCommands, stats);
+            } else {
+                collect(root, camera, settings, visibleCommands, stats, false, false);
+            }
         }
         return new QueryStats(
                 commands.length,
@@ -102,59 +154,127 @@ public final class SceneSnapshot {
                 stats.testedNodes);
     }
 
+    public QueryStats collectVisibleCommands(
+            CameraView camera, RenderSettings settings, VisibleCommandOnlyConsumer visibleCommands) {
+        Objects.requireNonNull(visibleCommands, "visibleCommands");
+        return collectVisible(camera, settings, new VisibleCommandConsumer() {
+            @Override
+            public void accept(RenderCommand command, double distanceSquared) {
+                visibleCommands.accept(command);
+            }
+
+            @Override
+            public boolean requiresDistance() {
+                return false;
+            }
+        });
+    }
+
+    public boolean isFullyVisible(CameraView camera, RenderSettings settings) {
+        Objects.requireNonNull(camera, "camera");
+        Objects.requireNonNull(settings, "settings");
+        if (root == null) {
+            return true;
+        }
+        return camera.visibility()
+                                .classify(
+                                        root.minimumX,
+                                        root.minimumY,
+                                        root.minimumZ,
+                                        root.maximumX,
+                                        root.maximumY,
+                                        root.maximumZ)
+                        == VisibilityTest.Classification.INSIDE
+                && settings.enabledDetails().bits() == -1L
+                && minimumCommandDistance >= settings.maxDistance()
+                && maximumDistanceSquaredToBounds(
+                                camera.position().x(),
+                                camera.position().y(),
+                                camera.position().z(),
+                                root)
+                        <= square(settings.maxDistance());
+    }
+
+    private void collectAll(CameraView camera, VisibleCommandConsumer visibleCommands, MutableQueryStats stats) {
+        double cameraX = camera.position().x();
+        double cameraY = camera.position().y();
+        double cameraZ = camera.position().z();
+        stats.testedNodes = 1;
+        stats.testedCommands = commands.length;
+        stats.visibleCommands = commands.length;
+        for (int index = 0; index < commands.length; index++) {
+            double distanceSquared = 0.0;
+            if (visibleCommands.requiresDistance()) {
+                double deltaX = centerX[index] - cameraX;
+                double deltaY = centerY[index] - cameraY;
+                double deltaZ = centerZ[index] - cameraZ;
+                distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+            }
+            visibleCommands.accept(commands[index], distanceSquared);
+        }
+    }
+
     private void collect(
             Node node,
             CameraView camera,
             RenderSettings settings,
             VisibleCommandConsumer visibleCommands,
-            MutableQueryStats stats) {
+            MutableQueryStats stats,
+            boolean frustumInside,
+            boolean distanceInside) {
         stats.testedNodes++;
         double cameraX = camera.position().x();
         double cameraY = camera.position().y();
         double cameraZ = camera.position().z();
-        if (distanceSquaredToBounds(cameraX, cameraY, cameraZ, node) > square(settings.maxDistance())) {
+        if (!distanceInside
+                && distanceSquaredToBounds(cameraX, cameraY, cameraZ, node) > square(settings.maxDistance())) {
             stats.distanceCulledCommands += node.itemCount;
             stats.spatiallyPrunedCommands += node.itemCount;
             return;
         }
-        if (camera.visibility() != VisibilityTest.ALL
-                && !camera.visibility()
-                        .isVisible(
-                                node.minimumX,
-                                node.minimumY,
-                                node.minimumZ,
-                                node.maximumX,
-                                node.maximumY,
-                                node.maximumZ)) {
-            stats.frustumCulledCommands += node.itemCount;
-            stats.spatiallyPrunedCommands += node.itemCount;
-            return;
+        boolean childrenDistanceInside = distanceInside
+                || minimumCommandDistance >= settings.maxDistance()
+                        && maximumDistanceSquaredToBounds(cameraX, cameraY, cameraZ, node)
+                                <= square(settings.maxDistance());
+        boolean childrenInside = frustumInside;
+        if (!frustumInside) {
+            VisibilityTest.Classification classification = camera.visibility()
+                    .classify(node.minimumX, node.minimumY, node.minimumZ, node.maximumX, node.maximumY, node.maximumZ);
+            if (classification == VisibilityTest.Classification.OUTSIDE) {
+                stats.frustumCulledCommands += node.itemCount;
+                stats.spatiallyPrunedCommands += node.itemCount;
+                return;
+            }
+            childrenInside = classification == VisibilityTest.Classification.INSIDE;
         }
         if (!node.isLeaf()) {
-            collect(node.left, camera, settings, visibleCommands, stats);
-            collect(node.right, camera, settings, visibleCommands, stats);
+            collect(node.left, camera, settings, visibleCommands, stats, childrenInside, childrenDistanceInside);
+            collect(node.right, camera, settings, visibleCommands, stats, childrenInside, childrenDistanceInside);
             return;
         }
 
+        boolean detailsInside = settings.enabledDetails().bits() == -1L;
         for (int orderedIndex = node.start; orderedIndex < node.end; orderedIndex++) {
             int index = order[orderedIndex];
             stats.testedCommands++;
             RenderCommand command = commands[index];
-            if (!command.details().visibleWithin(settings.enabledDetails())) {
+            if (!detailsInside && !command.details().visibleWithin(settings.enabledDetails())) {
                 stats.detailCulledCommands++;
                 continue;
             }
-            double centerX = (minimumX[index] + maximumX[index]) * 0.5;
-            double centerY = (minimumY[index] + maximumY[index]) * 0.5;
-            double centerZ = (minimumZ[index] + maximumZ[index]) * 0.5;
-            double deltaX = centerX - cameraX;
-            double deltaY = centerY - cameraY;
-            double deltaZ = centerZ - cameraZ;
-            double distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
-            double maximumDistance = Math.min(command.maxDistance(), settings.maxDistance());
-            if (distanceSquared > square(maximumDistance)) {
-                stats.distanceCulledCommands++;
-                continue;
+            double distanceSquared = 0.0;
+            if (!childrenDistanceInside || visibleCommands.requiresDistance()) {
+                double deltaX = centerX[index] - cameraX;
+                double deltaY = centerY[index] - cameraY;
+                double deltaZ = centerZ[index] - cameraZ;
+                distanceSquared = deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+                if (!childrenDistanceInside) {
+                    double maximumDistance = Math.min(command.maxDistance(), settings.maxDistance());
+                    if (distanceSquared > square(maximumDistance)) {
+                        stats.distanceCulledCommands++;
+                        continue;
+                    }
+                }
             }
             stats.visibleCommands++;
             visibleCommands.accept(command, distanceSquared);
@@ -172,6 +292,13 @@ public final class SceneSnapshot {
         return deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
     }
 
+    private static double maximumDistanceSquaredToBounds(double x, double y, double z, Node node) {
+        double deltaX = Math.max(Math.abs(x - node.minimumX), Math.abs(x - node.maximumX));
+        double deltaY = Math.max(Math.abs(y - node.minimumY), Math.abs(y - node.maximumY));
+        double deltaZ = Math.max(Math.abs(z - node.minimumZ), Math.abs(z - node.maximumZ));
+        return deltaX * deltaX + deltaY * deltaY + deltaZ * deltaZ;
+    }
+
     private static double axisDistance(double value, double minimum, double maximum) {
         if (value < minimum) {
             return minimum - value;
@@ -185,6 +312,15 @@ public final class SceneSnapshot {
     @FunctionalInterface
     public interface VisibleCommandConsumer {
         void accept(RenderCommand command, double distanceSquared);
+
+        default boolean requiresDistance() {
+            return true;
+        }
+    }
+
+    @FunctionalInterface
+    public interface VisibleCommandOnlyConsumer {
+        void accept(RenderCommand command);
     }
 
     public record IndexStats(int commands, int nodes, int leaves, long buildNanos) {}
@@ -299,9 +435,9 @@ public final class SceneSnapshot {
 
         private double center(int index, int axis) {
             return switch (axis) {
-                case 0 -> (minimumX[index] + maximumX[index]) * 0.5;
-                case 1 -> (minimumY[index] + maximumY[index]) * 0.5;
-                default -> (minimumZ[index] + maximumZ[index]) * 0.5;
+                case 0 -> centerX[index];
+                case 1 -> centerY[index];
+                default -> centerZ[index];
             };
         }
 

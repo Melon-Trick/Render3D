@@ -42,7 +42,11 @@ final class MassiveFrameCompilationTest {
         assertEquals(COMMAND_COUNT * 2, frame.stats().renderedIndices());
         assertEquals(1, frame.batches().size());
         assertEquals(COMMAND_COUNT, frame.batches().getFirst().size());
-        assertTrue(cache.stats().entries() <= 3);
-        assertTrue(cache.stats().hits() >= COMMAND_COUNT - 3L);
+        assertEquals(0, frame.stats().spatiallyTestedCommands());
+        assertTrue(frame.batches().getFirst().hasUniformGeometry());
+        assertTrue(frame.batches().getFirst().hasUniformStyle());
+        assertTrue(frame.batches().getFirst().distanceSquared(0) > 0.0);
+        assertEquals(1, cache.stats().entries());
+        assertEquals(1, cache.stats().misses());
     }
 }

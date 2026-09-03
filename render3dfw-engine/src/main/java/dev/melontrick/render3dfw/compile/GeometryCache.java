@@ -4,6 +4,7 @@ import dev.melontrick.render3dfw.model.Shape3d;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.atomic.AtomicReferenceArray;
 import java.util.concurrent.atomic.LongAdder;
 
@@ -13,6 +14,7 @@ public final class GeometryCache {
     private final Map<Key, CompiledShape> entries = new LinkedHashMap<>(64, 0.75F, true);
     private final AtomicReferenceArray<RecentGeometry> recentGeometry =
             new AtomicReferenceArray<>(DetailLevel.values().length);
+    private final AtomicReference<DetailPolicy> recentDetailPolicy = new AtomicReference<>();
     private long bytes;
     private final LongAdder hits = new LongAdder();
     private final LongAdder misses = new LongAdder();
@@ -26,6 +28,7 @@ public final class GeometryCache {
     }
 
     public CompiledShape get(Shape3d shape, DetailLevel detail) {
+        detail = detailPolicy(shape).detailInvariant() ? DetailLevel.LOW : detail;
         int recentIndex = detail.ordinal();
         RecentGeometry recent = recentGeometry.get(recentIndex);
         if (recent != null && recent.matches(shape)) {
@@ -37,6 +40,20 @@ public final class GeometryCache {
 
     public LookupSession openLookupSession() {
         return new LookupSession();
+    }
+
+    public boolean isDetailInvariant(Shape3d shape) {
+        return detailPolicy(Objects.requireNonNull(shape, "shape")).detailInvariant();
+    }
+
+    private DetailPolicy detailPolicy(Shape3d shape) {
+        DetailPolicy policy = recentDetailPolicy.get();
+        if (policy != null && policy.shape() == shape) {
+            return policy;
+        }
+        DetailPolicy resolved = new DetailPolicy(shape, registry.detailInvariant(shape));
+        recentDetailPolicy.set(resolved);
+        return resolved;
     }
 
     private synchronized CompiledShape getSlow(Shape3d shape, DetailLevel detail, int recentIndex) {
@@ -98,6 +115,8 @@ public final class GeometryCache {
         }
     }
 
+    private record DetailPolicy(Shape3d shape, boolean detailInvariant) {}
+
     public record CacheStats(int entries, long bytes, long hits, long misses) {}
 
     public final class LookupSession implements AutoCloseable {
@@ -116,6 +135,10 @@ public final class GeometryCache {
             shapes[index] = shape;
             geometry[index] = compiled;
             return compiled;
+        }
+
+        public void recordHit() {
+            localHits++;
         }
 
         @Override

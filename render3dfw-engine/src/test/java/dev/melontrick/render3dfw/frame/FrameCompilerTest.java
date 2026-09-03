@@ -1,6 +1,8 @@
 package dev.melontrick.render3dfw.frame;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.melontrick.render3dfw.api.ColorRgba;
 import dev.melontrick.render3dfw.api.DepthMode;
@@ -57,5 +59,28 @@ final class FrameCompilerTest {
         assertEquals(
                 new Vec3d(5.0, 0.0, 0.0),
                 frame.batches().getFirst().instances().getFirst().translation());
+    }
+
+    @Test
+    void keepsVariableStylesInAZeroCopyUniformShapeBatch() {
+        FrameCompiler compiler = new FrameCompiler(new GeometryCache(ShapeRegistry.createDefault(), 1_024L * 1_024L));
+        Box3d unit = new Box3d(Vec3d.ZERO, new Vec3d(1.0, 1.0, 1.0));
+        RenderStyle white = RenderStyle.lines(ColorRgba.WHITE);
+        RenderStyle orange = RenderStyle.lines(ColorRgba.of(255, 96, 32, 255));
+        RenderCommand first = RenderCommand.of(unit, white).withState(RenderState.OPAQUE_DEBUG);
+        RenderCommand second = RenderCommand.of(unit, orange)
+                .withState(RenderState.OPAQUE_DEBUG)
+                .at(new Vec3d(2.0, 0.0, 0.0));
+
+        RenderFrame frame =
+                compiler.compile(List.of(first, second), CameraView.at(Vec3d.ZERO), RenderSettings.defaults());
+        RenderBatch batch = frame.batches().getFirst();
+
+        assertEquals(0, frame.stats().spatiallyTestedCommands());
+        assertTrue(batch.hasUniformGeometry());
+        assertTrue(batch.hasUniformShapeMode());
+        assertFalse(batch.hasUniformStyle());
+        assertEquals(white, batch.style(0));
+        assertEquals(orange, batch.style(1));
     }
 }
