@@ -9,7 +9,7 @@ strictly separate adapter for each supported Fabric/Minecraft version.
 - `render3d-core` (the root project): pure Java, with no Minecraft, Fabric, LWJGL or rendering API
   dependency.
 - `fabric-26.1`: the minimal Minecraft 26.1 hook and native program implementations. Its default
-  flat-color program follows Meteor's rendering model: consolidated line/triangle streams,
+  flat-color program uses consolidated line/triangle streams,
   camera-relative vertices, cached pipeline variants and at most two draws per state bucket.
 
 The next Minecraft version should add another sibling adapter (`fabric-<version>`) rather than

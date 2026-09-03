@@ -7,7 +7,7 @@
   "environment": "client",
   "entrypoints": {
     "client": [
-      "fr.vriege.render3d.fabric.v26_1.Render3DClient"
+      "dev.melontrick.render3dfw.fabric.v26_1.Render3DClient"
     ]
   },
   "depends": {

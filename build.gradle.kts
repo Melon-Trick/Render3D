@@ -5,7 +5,7 @@ plugins {
     `maven-publish`
 }
 
-group = "fr.vriege.render3d"
+group = "dev.melontrick.render3dfw"
 version = providers.gradleProperty("mod_version").get()
 
 base {
