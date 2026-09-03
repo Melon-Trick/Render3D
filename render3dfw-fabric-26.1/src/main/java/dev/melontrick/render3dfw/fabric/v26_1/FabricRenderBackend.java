@@ -10,7 +10,6 @@ import net.minecraft.client.renderer.culling.Frustum;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 
-/** The complete Minecraft hook: one extraction callback and no game types leaking into core. */
 public final class FabricRenderBackend {
     private final Render3DSystem system;
     private final FabricProgramRegistry programs;
@@ -32,14 +31,8 @@ public final class FabricRenderBackend {
             Frustum frustum = context.levelState().cameraRenderState.cullFrustum;
             CameraView view = new CameraView(
                     new Vec3d(camera.x(), camera.y(), camera.z()),
-                    bounds -> frustum == null
-                            || frustum.isVisible(new AABB(
-                                    bounds.minimum().x(),
-                                    bounds.minimum().y(),
-                                    bounds.minimum().z(),
-                                    bounds.maximum().x(),
-                                    bounds.maximum().y(),
-                                    bounds.maximum().z())));
+                    (minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ) -> frustum == null
+                            || frustum.isVisible(new AABB(minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ)));
             extractedFrame = system.compile(view);
         });
         LevelRenderEvents.END_MAIN.register(context -> {

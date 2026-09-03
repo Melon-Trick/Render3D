@@ -8,27 +8,34 @@ import java.util.Objects;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
 
-/** Lock-free read scene. Writers publish a complete immutable snapshot atomically. */
 public final class RenderScene {
-    private final AtomicReference<List<RenderCommand>> snapshot = new AtomicReference<>(List.of());
+    private final AtomicReference<SceneSnapshot> snapshot = new AtomicReference<>(SceneSnapshot.empty());
 
     public List<RenderCommand> snapshot() {
+        return snapshot.get().commands();
+    }
+
+    public SceneSnapshot indexedSnapshot() {
         return snapshot.get();
+    }
+
+    public void publish(SceneSnapshot preparedSnapshot) {
+        snapshot.set(Objects.requireNonNull(preparedSnapshot, "preparedSnapshot"));
     }
 
     public void replace(Collection<RenderCommand> commands) {
         Objects.requireNonNull(commands, "commands");
-        snapshot.set(List.copyOf(commands));
+        snapshot.set(SceneSnapshot.of(commands));
     }
 
     public void update(Consumer<List<RenderCommand>> editor) {
         Objects.requireNonNull(editor, "editor");
-        List<RenderCommand> mutable = new ArrayList<>(snapshot.get());
+        List<RenderCommand> mutable = new ArrayList<>(snapshot.get().commands());
         editor.accept(mutable);
-        snapshot.set(List.copyOf(mutable));
+        snapshot.set(SceneSnapshot.of(mutable));
     }
 
     public void clear() {
-        snapshot.set(List.of());
+        snapshot.set(SceneSnapshot.empty());
     }
 }

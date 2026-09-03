@@ -6,7 +6,6 @@ import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 
-/** Maps model types to geometry compilers and supports application-defined forms. */
 public final class ShapeRegistry {
     private final Map<Class<?>, ShapeCompiler<?>> compilers = new ConcurrentHashMap<>();
     private final Map<Class<?>, ShapeCompiler<?>> resolved = new ConcurrentHashMap<>();

@@ -3,7 +3,6 @@ package dev.melontrick.render3dfw.frame;
 import dev.melontrick.render3dfw.api.DetailMask;
 import java.util.Objects;
 
-/** Runtime limits can be replaced atomically without rebuilding scenes or cached geometry. */
 public record RenderSettings(
         DetailMask enabledDetails,
         int maxCommands,
@@ -30,5 +29,9 @@ public record RenderSettings(
 
     public static RenderSettings defaults() {
         return new RenderSettings(DetailMask.ALL, 100_000, 4_000_000, 512.0, 32.0, 128.0, 64L * 1024L * 1024L);
+    }
+
+    public static RenderSettings massive() {
+        return new RenderSettings(DetailMask.ALL, 500_000, 64_000_000, 512.0, 32.0, 128.0, 128L * 1024L * 1024L);
     }
 }

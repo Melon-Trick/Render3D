@@ -2,7 +2,6 @@ package dev.melontrick.render3dfw.math;
 
 import java.util.Objects;
 
-/** Axis-aligned bounds used for culling and level-of-detail selection. */
 public record Bounds3d(Vec3d minimum, Vec3d maximum) {
     public Bounds3d {
         Objects.requireNonNull(minimum, "minimum");

@@ -23,10 +23,24 @@ engine solely for platform churn.
 - immutable primitive models and custom `Shape3d` support;
 - automatic shape compiler discovery through `ServiceLoader`;
 - weighted LRU geometry cache, independently of instance color and placement;
+- persistent per-scene BVHs, built on publication rather than rebuilt every frame;
 - distance, detail and frustum culling with command and index budgets;
 - automatic LOD for procedural geometry;
+- allocation-bounded priority selection and structure-of-arrays render batches;
 - state buckets keyed by program, depth, blend and cull modes;
 - lock-free immutable scene snapshots for render-thread reads.
+
+The Fabric backend reuses CPU staging memory and grows persistent GPU vertex/index buffers by
+power-of-two capacity. A scene may therefore contain hundreds of thousands of commands without
+forcing a complete per-command scan or fresh GPU buffer allocation every frame. If all commands
+are simultaneously visible, the configured command/index budgets still bound submitted work.
+Repeated opaque geometry, and repeated alpha geometry when it remains one depth-sorted group, uses
+a compact 12-byte instance stream and an indexed instanced draw. `RenderSettings.massive()` raises
+the safety budgets to 500,000 commands and 64 million indices for this workload.
+
+For a very large scene, build `SceneSnapshot.of(commands)` on a worker thread and publish it with
+`RenderScene.publish(snapshot)`. Rendering continues to read the previous immutable snapshot until
+the new BVH is atomically available.
 
 The API and engine classpaths contain no Minecraft, Fabric, LWJGL or rendering API dependency.
 Minecraft classes occur exclusively under `render3dfw-fabric-26.1`.

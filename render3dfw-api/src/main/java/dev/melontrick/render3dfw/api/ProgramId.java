@@ -2,7 +2,6 @@ package dev.melontrick.render3dfw.api;
 
 import java.util.Objects;
 
-/** Stable backend-independent identifier for a shader program or material pipeline. */
 public record ProgramId(String value) implements Comparable<ProgramId> {
     public static final ProgramId FLAT_COLOR = new ProgramId("render3dfw:flat_color");
 

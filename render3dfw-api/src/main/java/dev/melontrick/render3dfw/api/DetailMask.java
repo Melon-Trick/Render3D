@@ -1,6 +1,5 @@
 package dev.melontrick.render3dfw.api;
 
-/** Allocation-free mask for up to 64 independently switchable debugging details. */
 public record DetailMask(long bits) {
     public static final DetailMask ALWAYS = new DetailMask(0L);
     public static final DetailMask ALL = new DetailMask(-1L);

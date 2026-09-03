@@ -1,10 +1,9 @@
 package dev.melontrick.render3dfw.frame;
 
-import dev.melontrick.render3dfw.math.Bounds3d;
-
 @FunctionalInterface
 public interface VisibilityTest {
-    VisibilityTest ALL = bounds -> true;
+    VisibilityTest ALL = (minimumX, minimumY, minimumZ, maximumX, maximumY, maximumZ) -> true;
 
-    boolean isVisible(Bounds3d bounds);
+    boolean isVisible(
+            double minimumX, double minimumY, double minimumZ, double maximumX, double maximumY, double maximumZ);
 }

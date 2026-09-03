@@ -5,7 +5,6 @@ import dev.melontrick.render3dfw.math.Vec3d;
 import java.util.List;
 import java.util.Objects;
 
-/** An indexed triangle mesh. Indices are interpreted in groups of three. */
 public record Mesh3d(List<Vec3d> vertices, List<Integer> indices, Bounds3d bounds) implements Shape3d {
     public Mesh3d {
         Objects.requireNonNull(vertices, "vertices");

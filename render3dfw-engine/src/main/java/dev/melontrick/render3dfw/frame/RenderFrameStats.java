@@ -7,6 +7,12 @@ public record RenderFrameStats(
         int distanceCulledCommands,
         int frustumCulledCommands,
         int budgetCulledCommands,
+        int spatiallyTestedCommands,
+        int spatiallyPrunedCommands,
+        int spatialNodesTested,
         int renderedIndices,
         int batches,
+        long cullingNanos,
+        long geometryNanos,
+        long batchingNanos,
         long compilationNanos) {}

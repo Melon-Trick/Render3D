@@ -24,9 +24,9 @@ import dev.melontrick.render3dfw.api.CullMode;
 import dev.melontrick.render3dfw.api.DepthMode;
 import dev.melontrick.render3dfw.api.RenderState;
 import dev.melontrick.render3dfw.compile.CompiledShape;
-import dev.melontrick.render3dfw.frame.DrawInstance;
 import dev.melontrick.render3dfw.frame.RenderBatch;
 import dev.melontrick.render3dfw.math.Vec3d;
+import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.OptionalDouble;
 import java.util.OptionalInt;
@@ -38,10 +38,6 @@ import org.joml.Matrix4f;
 import org.joml.Vector3f;
 import org.joml.Vector4f;
 
-/**
- * Direct batched GPU renderer using one line stream and one triangle stream per state bucket,
- * followed by at most two indexed draws.
- */
 final class FlatColorProgram implements FabricProgram {
     private static final String DYNAMIC_TRANSFORMS = "DynamicTransforms";
     private static final String PROJECTION = "Projection";
@@ -50,77 +46,105 @@ final class FlatColorProgram implements FabricProgram {
     private static final Vector4f WHITE = new Vector4f(1.0F, 1.0F, 1.0F, 1.0F);
     private static final Vector3f ZERO = new Vector3f();
     private static final Matrix4f IDENTITY = new Matrix4f();
+    private static final int INITIAL_STAGING_BYTES = 1 << 20;
 
     private final Map<PipelineKey, RenderPipeline> pipelines = new ConcurrentHashMap<>();
+    private final Map<BufferKey, GpuBuffer> gpuBuffers = new ConcurrentHashMap<>();
+    private final ByteBufferBuilder lineStaging = new ByteBufferBuilder(INITIAL_STAGING_BYTES);
+    private final ByteBufferBuilder triangleStaging = new ByteBufferBuilder(INITIAL_STAGING_BYTES);
+    private final InstancedFlatColorRenderer instanced = new InstancedFlatColorRenderer();
 
     @Override
     public void draw(LevelRenderContext context, Vec3d cameraPosition, RenderBatch batch) {
         int lineVertices = countLineVertices(batch);
-        if (lineVertices > 0) {
-            drawLines(context, cameraPosition, batch, lineVertices);
+        if (lineVertices > 0 && !instanced.drawLines(context, cameraPosition, batch)) {
+            drawLines(context, cameraPosition, batch);
         }
         int triangleVertices = countTriangleVertices(batch);
-        if (triangleVertices > 0) {
-            drawTriangles(context, cameraPosition, batch, triangleVertices);
+        if (triangleVertices > 0 && !instanced.drawTriangles(context, cameraPosition, batch)) {
+            drawTriangles(context, cameraPosition, batch);
         }
     }
 
-    private void drawLines(LevelRenderContext context, Vec3d camera, RenderBatch batch, int vertexCount) {
-        int byteCount =
-                Math.multiplyExact(vertexCount, DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH.getVertexSize());
-        try (ByteBufferBuilder memory = ByteBufferBuilder.exactlySized(byteCount)) {
+    private void drawLines(LevelRenderContext context, Vec3d camera, RenderBatch batch) {
+        lineStaging.clear();
+        try {
             BufferBuilder builder = new BufferBuilder(
-                    memory, VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH);
-            for (DrawInstance instance : batch.instances()) {
-                if (!instance.style().shapeMode().lines()) {
+                    lineStaging, VertexFormat.Mode.LINES, DefaultVertexFormat.POSITION_COLOR_NORMAL_LINE_WIDTH);
+            for (int instance = 0; instance < batch.size(); instance++) {
+                if (!batch.style(instance).shapeMode().lines()) {
                     continue;
                 }
-                CompiledShape geometry = instance.geometry();
+                CompiledShape geometry = batch.geometry(instance);
                 for (int index = 0; index < geometry.lineIndexCount(); index += 2) {
                     int first = geometry.lineIndex(index);
                     int second = geometry.lineIndex(index + 1);
-                    float x1 = relativeX(geometry, first, instance, camera);
-                    float y1 = relativeY(geometry, first, instance, camera);
-                    float z1 = relativeZ(geometry, first, instance, camera);
-                    float x2 = relativeX(geometry, second, instance, camera);
-                    float y2 = relativeY(geometry, second, instance, camera);
-                    float z2 = relativeZ(geometry, second, instance, camera);
+                    float x1 = relativeX(geometry, first, batch, instance, camera);
+                    float y1 = relativeY(geometry, first, batch, instance, camera);
+                    float z1 = relativeZ(geometry, first, batch, instance, camera);
+                    float x2 = relativeX(geometry, second, batch, instance, camera);
+                    float y2 = relativeY(geometry, second, batch, instance, camera);
+                    float z2 = relativeZ(geometry, second, batch, instance, camera);
                     float dx = x2 - x1;
                     float dy = y2 - y1;
                     float dz = z2 - z1;
                     float inverseLength = inverseLength(dx, dy, dz);
-                    vertex(builder, x1, y1, z1, instance, dx * inverseLength, dy * inverseLength, dz * inverseLength);
-                    vertex(builder, x2, y2, z2, instance, dx * inverseLength, dy * inverseLength, dz * inverseLength);
+                    vertex(
+                            builder,
+                            x1,
+                            y1,
+                            z1,
+                            batch,
+                            instance,
+                            dx * inverseLength,
+                            dy * inverseLength,
+                            dz * inverseLength);
+                    vertex(
+                            builder,
+                            x2,
+                            y2,
+                            z2,
+                            batch,
+                            instance,
+                            dx * inverseLength,
+                            dy * inverseLength,
+                            dz * inverseLength);
                 }
             }
             try (MeshData mesh = builder.buildOrThrow()) {
-                drawMesh(context, mesh, pipeline(batch.state(), PrimitiveStream.LINES));
+                PipelineKey key = new PipelineKey(batch.state(), PrimitiveStream.LINES);
+                drawMesh(context, mesh, key);
             }
+        } finally {
+            lineStaging.clear();
         }
     }
 
-    private void drawTriangles(LevelRenderContext context, Vec3d camera, RenderBatch batch, int vertexCount) {
-        int byteCount = Math.multiplyExact(vertexCount, DefaultVertexFormat.POSITION_COLOR.getVertexSize());
-        try (ByteBufferBuilder memory = ByteBufferBuilder.exactlySized(byteCount)) {
+    private void drawTriangles(LevelRenderContext context, Vec3d camera, RenderBatch batch) {
+        triangleStaging.clear();
+        try {
             BufferBuilder builder =
-                    new BufferBuilder(memory, VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
-            for (DrawInstance instance : batch.instances()) {
-                if (!instance.style().shapeMode().fill()) {
+                    new BufferBuilder(triangleStaging, VertexFormat.Mode.TRIANGLES, DefaultVertexFormat.POSITION_COLOR);
+            for (int instance = 0; instance < batch.size(); instance++) {
+                if (!batch.style(instance).shapeMode().fill()) {
                     continue;
                 }
-                CompiledShape geometry = instance.geometry();
+                CompiledShape geometry = batch.geometry(instance);
                 for (int index = 0; index < geometry.triangleIndexCount(); index++) {
                     int vertex = geometry.triangleIndex(index);
                     builder.addVertex(
-                                    relativeX(geometry, vertex, instance, camera),
-                                    relativeY(geometry, vertex, instance, camera),
-                                    relativeZ(geometry, vertex, instance, camera))
-                            .setColor(instance.style().fillColor().argb());
+                                    relativeX(geometry, vertex, batch, instance, camera),
+                                    relativeY(geometry, vertex, batch, instance, camera),
+                                    relativeZ(geometry, vertex, batch, instance, camera))
+                            .setColor(batch.style(instance).fillColor().argb());
                 }
             }
             try (MeshData mesh = builder.buildOrThrow()) {
-                drawMesh(context, mesh, pipeline(batch.state(), PrimitiveStream.TRIANGLES));
+                PipelineKey key = new PipelineKey(batch.state(), PrimitiveStream.TRIANGLES);
+                drawMesh(context, mesh, key);
             }
+        } finally {
+            triangleStaging.clear();
         }
     }
 
@@ -129,19 +153,35 @@ final class FlatColorProgram implements FabricProgram {
             float x,
             float y,
             float z,
-            DrawInstance instance,
+            RenderBatch batch,
+            int instance,
             float normalX,
             float normalY,
             float normalZ) {
         output.addVertex(x, y, z)
-                .setColor(instance.style().lineColor().argb())
+                .setColor(batch.style(instance).lineColor().argb())
                 .setNormal(normalX, normalY, normalZ)
-                .setLineWidth(instance.style().lineWidth());
+                .setLineWidth(batch.style(instance).lineWidth());
     }
 
-    private static void drawMesh(LevelRenderContext context, MeshData mesh, RenderPipeline pipeline) {
+    @Override
+    public void close() {
+        gpuBuffers.values().forEach(buffer -> {
+            if (!buffer.isClosed()) {
+                buffer.close();
+            }
+        });
+        gpuBuffers.clear();
+        instanced.close();
+        lineStaging.close();
+        triangleStaging.close();
+    }
+
+    private void drawMesh(LevelRenderContext context, MeshData mesh, PipelineKey key) {
+        RenderPipeline pipeline = pipeline(key);
         MeshData.DrawState drawState = mesh.drawState();
-        GpuBuffer vertices = pipeline.getVertexFormat().uploadImmediateVertexBuffer(mesh.vertexBuffer());
+        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
+        GpuBuffer vertices = upload(encoder, new BufferKey(key, false), mesh.vertexBuffer(), GpuBuffer.USAGE_VERTEX);
         GpuBuffer indices;
         VertexFormat.IndexType indexType;
         if (mesh.indexBuffer() == null) {
@@ -149,7 +189,7 @@ final class FlatColorProgram implements FabricProgram {
             indices = sequential.getBuffer(drawState.indexCount());
             indexType = sequential.type();
         } else {
-            indices = pipeline.getVertexFormat().uploadImmediateIndexBuffer(mesh.indexBuffer());
+            indices = upload(encoder, new BufferKey(key, true), mesh.indexBuffer(), GpuBuffer.USAGE_INDEX);
             indexType = drawState.indexType();
         }
 
@@ -162,7 +202,6 @@ final class FlatColorProgram implements FabricProgram {
         GpuTextureView depth = RenderSystem.outputDepthTextureOverride != null
                 ? RenderSystem.outputDepthTextureOverride
                 : target.getDepthTextureView();
-        CommandEncoder encoder = RenderSystem.getDevice().createCommandEncoder();
         try (RenderPass pass = encoder.createRenderPass(
                 () -> "Render3D direct batch", color, OptionalInt.empty(), depth, OptionalDouble.empty())) {
             pass.setPipeline(pipeline);
@@ -174,8 +213,33 @@ final class FlatColorProgram implements FabricProgram {
         }
     }
 
-    private RenderPipeline pipeline(RenderState state, PrimitiveStream stream) {
-        return pipelines.computeIfAbsent(new PipelineKey(state, stream), FlatColorProgram::createPipeline);
+    private RenderPipeline pipeline(PipelineKey key) {
+        return pipelines.computeIfAbsent(key, FlatColorProgram::createPipeline);
+    }
+
+    private GpuBuffer upload(CommandEncoder encoder, BufferKey key, ByteBuffer data, int usage) {
+        int requiredBytes = data.remaining();
+        GpuBuffer buffer = gpuBuffers.compute(key, (ignored, existing) -> {
+            if (existing != null && !existing.isClosed() && existing.size() >= requiredBytes) {
+                return existing;
+            }
+            if (existing != null && !existing.isClosed()) {
+                existing.close();
+            }
+            long capacity = bufferCapacity(requiredBytes);
+            return RenderSystem.getDevice()
+                    .createBuffer(() -> "Render3DFW " + key.path(), usage | GpuBuffer.USAGE_COPY_DST, capacity);
+        });
+        encoder.writeToBuffer(buffer.slice(0L, requiredBytes), data);
+        return buffer;
+    }
+
+    private static long bufferCapacity(int requiredBytes) {
+        long capacity = 1L;
+        while (capacity < requiredBytes) {
+            capacity <<= 1;
+        }
+        return Math.max(4_096L, capacity);
     }
 
     private static RenderPipeline createPipeline(PipelineKey key) {
@@ -212,9 +276,9 @@ final class FlatColorProgram implements FabricProgram {
 
     private static int countLineVertices(RenderBatch batch) {
         int count = 0;
-        for (DrawInstance instance : batch.instances()) {
-            if (instance.style().shapeMode().lines()) {
-                count = Math.addExact(count, instance.geometry().lineIndexCount());
+        for (int instance = 0; instance < batch.size(); instance++) {
+            if (batch.style(instance).shapeMode().lines()) {
+                count = Math.addExact(count, batch.geometry(instance).lineIndexCount());
             }
         }
         return count;
@@ -222,24 +286,24 @@ final class FlatColorProgram implements FabricProgram {
 
     private static int countTriangleVertices(RenderBatch batch) {
         int count = 0;
-        for (DrawInstance instance : batch.instances()) {
-            if (instance.style().shapeMode().fill()) {
-                count = Math.addExact(count, instance.geometry().triangleIndexCount());
+        for (int instance = 0; instance < batch.size(); instance++) {
+            if (batch.style(instance).shapeMode().fill()) {
+                count = Math.addExact(count, batch.geometry(instance).triangleIndexCount());
             }
         }
         return count;
     }
 
-    private static float relativeX(CompiledShape shape, int vertex, DrawInstance instance, Vec3d camera) {
-        return (float) (shape.x(vertex) + instance.translation().x() - camera.x());
+    private static float relativeX(CompiledShape shape, int vertex, RenderBatch batch, int instance, Vec3d camera) {
+        return (float) (shape.x(vertex) + batch.translation(instance).x() - camera.x());
     }
 
-    private static float relativeY(CompiledShape shape, int vertex, DrawInstance instance, Vec3d camera) {
-        return (float) (shape.y(vertex) + instance.translation().y() - camera.y());
+    private static float relativeY(CompiledShape shape, int vertex, RenderBatch batch, int instance, Vec3d camera) {
+        return (float) (shape.y(vertex) + batch.translation(instance).y() - camera.y());
     }
 
-    private static float relativeZ(CompiledShape shape, int vertex, DrawInstance instance, Vec3d camera) {
-        return (float) (shape.z(vertex) + instance.translation().z() - camera.z());
+    private static float relativeZ(CompiledShape shape, int vertex, RenderBatch batch, int instance, Vec3d camera) {
+        return (float) (shape.z(vertex) + batch.translation(instance).z() - camera.z());
     }
 
     private static float inverseLength(float x, float y, float z) {
@@ -258,6 +322,12 @@ final class FlatColorProgram implements FabricProgram {
                     + state.depth().name().toLowerCase() + "/"
                     + state.blend().name().toLowerCase() + "/"
                     + state.cull().name().toLowerCase();
+        }
+    }
+
+    private record BufferKey(PipelineKey pipeline, boolean indices) {
+        private String path() {
+            return pipeline.path() + (indices ? "/indices" : "/vertices");
         }
     }
 }

@@ -3,14 +3,14 @@ package dev.melontrick.render3dfw.fabric.v26_1;
 import dev.melontrick.render3dfw.api.ProgramId;
 import dev.melontrick.render3dfw.frame.RenderBatch;
 import dev.melontrick.render3dfw.math.Vec3d;
+import java.util.HashSet;
 import java.util.Map;
 import java.util.Objects;
 import java.util.ServiceLoader;
 import java.util.concurrent.ConcurrentHashMap;
 import net.fabricmc.fabric.api.client.rendering.v1.level.LevelRenderContext;
 
-/** Routes backend-independent program ids to Minecraft 26.1 implementations. */
-public final class FabricProgramRegistry {
+public final class FabricProgramRegistry implements AutoCloseable {
     private final Map<ProgramId, FabricProgram> programs = new ConcurrentHashMap<>();
 
     public static FabricProgramRegistry createDefault() {
@@ -35,5 +35,11 @@ public final class FabricProgramRegistry {
                     + batch.state().program().value());
         }
         program.draw(context, cameraPosition, batch);
+    }
+
+    @Override
+    public void close() {
+        new HashSet<>(programs.values()).forEach(FabricProgram::close);
+        programs.clear();
     }
 }

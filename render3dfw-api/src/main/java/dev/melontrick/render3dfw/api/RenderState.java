@@ -2,10 +2,11 @@ package dev.melontrick.render3dfw.api;
 
 import java.util.Objects;
 
-/** Immutable GPU state. Equal states are automatically rendered in the same bucket. */
 public record RenderState(ProgramId program, DepthMode depth, BlendMode blend, CullMode cull) {
     public static final RenderState DEBUG =
             new RenderState(ProgramId.FLAT_COLOR, DepthMode.TESTED_READ_ONLY, BlendMode.ALPHA, CullMode.NONE);
+    public static final RenderState OPAQUE_DEBUG =
+            new RenderState(ProgramId.FLAT_COLOR, DepthMode.TESTED_READ_ONLY, BlendMode.OPAQUE, CullMode.NONE);
 
     public RenderState {
         Objects.requireNonNull(program, "program");

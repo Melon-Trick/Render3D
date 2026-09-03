@@ -1,4 +1,3 @@
-import com.diffplug.gradle.spotless.SpotlessExtension
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 
 plugins {
@@ -13,6 +12,15 @@ spotless {
         trimTrailingWhitespace()
         endWithNewline()
     }
+    java {
+        target("render3dfw-*/src/**/*.java")
+        palantirJavaFormat("2.96.0")
+        removeUnusedImports()
+        forbidWildcardImports()
+        formatAnnotations()
+        trimTrailingWhitespace()
+        endWithNewline()
+    }
 }
 
 allprojects {
@@ -21,8 +29,6 @@ allprojects {
 }
 
 subprojects {
-    apply(plugin = "com.diffplug.spotless")
-
     pluginManager.withPlugin("java") {
         extensions.configure<JavaPluginExtension> {
             sourceCompatibility = JavaVersion.VERSION_25
@@ -51,14 +57,4 @@ subprojects {
         }
     }
 
-    extensions.configure<SpotlessExtension> {
-        java {
-            palantirJavaFormat("2.96.0").formatJavadoc(false)
-            removeUnusedImports()
-            forbidWildcardImports()
-            formatAnnotations()
-            trimTrailingWhitespace()
-            endWithNewline()
-        }
-    }
 }

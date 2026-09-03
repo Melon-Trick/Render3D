@@ -3,7 +3,6 @@ package dev.melontrick.render3dfw.compile;
 import dev.melontrick.render3dfw.math.Bounds3d;
 import java.util.Objects;
 
-/** Backend-neutral indexed geometry. Arrays are private and exposed through allocation-free accessors. */
 public final class CompiledShape {
     private final double[] positions;
     private final int[] lineIndices;

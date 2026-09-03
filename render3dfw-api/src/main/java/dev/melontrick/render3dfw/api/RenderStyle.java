@@ -2,7 +2,6 @@ package dev.melontrick.render3dfw.api;
 
 import java.util.Objects;
 
-/** Per-instance appearance, deliberately kept out of cached model geometry. */
 public record RenderStyle(ColorRgba lineColor, ColorRgba fillColor, float lineWidth, ShapeMode shapeMode) {
     public RenderStyle {
         Objects.requireNonNull(lineColor, "lineColor");

@@ -4,7 +4,6 @@ import dev.melontrick.render3dfw.math.Bounds3d;
 import dev.melontrick.render3dfw.math.Vec3d;
 import java.util.Arrays;
 
-/** Mutable scratch builder used only while a model is compiled into the cache. */
 public final class GeometryBuilder {
     private double[] positions = new double[48];
     private int positionSize;

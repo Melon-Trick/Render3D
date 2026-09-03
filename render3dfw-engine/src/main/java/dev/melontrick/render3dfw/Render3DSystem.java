@@ -1,6 +1,5 @@
 package dev.melontrick.render3dfw;
 
-import dev.melontrick.render3dfw.api.RenderCommand;
 import dev.melontrick.render3dfw.compile.GeometryCache;
 import dev.melontrick.render3dfw.compile.ShapeRegistry;
 import dev.melontrick.render3dfw.frame.CameraView;
@@ -8,6 +7,7 @@ import dev.melontrick.render3dfw.frame.FrameCompiler;
 import dev.melontrick.render3dfw.frame.RenderFrame;
 import dev.melontrick.render3dfw.frame.RenderSettings;
 import dev.melontrick.render3dfw.scene.RenderScene;
+import dev.melontrick.render3dfw.scene.SceneSnapshot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
@@ -15,7 +15,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicReference;
 
-/** Engine-independent Render3D runtime. Platform modules only feed cameras and consume frames. */
 public final class Render3DSystem {
     private final ShapeRegistry shapes;
     private final ConcurrentMap<String, RenderScene> scenes = new ConcurrentHashMap<>();
@@ -64,14 +63,17 @@ public final class Render3DSystem {
     }
 
     public RenderFrame compile(CameraView camera) {
-        List<RenderCommand> commands = new ArrayList<>();
+        List<SceneSnapshot> snapshots = new ArrayList<>(scenes.size());
         for (RenderScene scene : scenes.values()) {
-            commands.addAll(scene.snapshot());
+            SceneSnapshot snapshot = scene.indexedSnapshot();
+            if (snapshot.size() > 0) {
+                snapshots.add(snapshot);
+            }
         }
-        if (commands.isEmpty()) {
+        if (snapshots.isEmpty()) {
             return RenderFrame.empty();
         }
-        return resources.get().compiler().compile(commands, camera, settings.get());
+        return resources.get().compiler().compileSnapshots(snapshots, camera, settings.get());
     }
 
     public GeometryCache.CacheStats cacheStats() {

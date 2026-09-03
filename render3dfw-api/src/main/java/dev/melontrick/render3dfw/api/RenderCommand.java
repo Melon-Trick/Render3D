@@ -4,7 +4,6 @@ import dev.melontrick.render3dfw.math.Vec3d;
 import dev.melontrick.render3dfw.model.Shape3d;
 import java.util.Objects;
 
-/** A cheap model instance. Geometry is cached separately from style and placement. */
 public record RenderCommand(
         Shape3d shape,
         Vec3d translation,

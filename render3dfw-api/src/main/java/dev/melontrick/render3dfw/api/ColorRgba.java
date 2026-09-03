@@ -1,6 +1,5 @@
 package dev.melontrick.render3dfw.api;
 
-/** A packed ARGB color. */
 public record ColorRgba(int argb) {
     public static final ColorRgba WHITE = new ColorRgba(0xFFFFFFFF);
     public static final ColorRgba TRANSPARENT = new ColorRgba(0x00000000);
