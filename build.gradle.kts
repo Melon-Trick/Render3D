@@ -3,7 +3,6 @@ import org.gradle.api.tasks.testing.logging.TestExceptionFormat
 plugins {
     base
     id("com.diffplug.spotless") version "8.10.0"
-    id("net.fabricmc.fabric-loom") version "1.17.20" apply false
 }
 
 spotless {
