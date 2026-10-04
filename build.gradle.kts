@@ -23,7 +23,7 @@ spotless {
 }
 
 allprojects {
-    group = "dev.melontrick.render3dfw"
+    group = "dev.vriege.render3dfw"
     version = providers.gradleProperty("mod_version").get()
 }
 

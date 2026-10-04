@@ -28,7 +28,7 @@ val selectedProfileDirectory = profileDirectory.get()
 val profileMassiveFrame = tasks.register<JavaExec>("profileMassiveFrame") {
     dependsOn(tasks.named("testClasses"))
     classpath = testSourceSet.get().runtimeClasspath
-    mainClass = "dev.melontrick.render3dfw.profile.MassiveFrameProfile"
+    mainClass = "dev.vriege.render3dfw.profile.MassiveFrameProfile"
     maxHeapSize = "3g"
     args(selectedProfileMode, selectedProfileDirectory.file("massive-$selectedProfileMode.jfr").asFile.absolutePath)
 }
@@ -36,7 +36,7 @@ val profileMassiveFrame = tasks.register<JavaExec>("profileMassiveFrame") {
 tasks.register<JavaExec>("flameGraphMassiveFrame") {
     dependsOn(profileMassiveFrame)
     classpath = testSourceSet.get().runtimeClasspath
-    mainClass = "dev.melontrick.render3dfw.profile.JfrFlameGraph"
+    mainClass = "dev.vriege.render3dfw.profile.JfrFlameGraph"
     args(
         selectedProfileDirectory.file("massive-$selectedProfileMode.jfr").asFile.absolutePath,
         selectedProfileDirectory.file("massive-$selectedProfileMode-flamegraph.svg").asFile.absolutePath,
