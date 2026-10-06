@@ -24,10 +24,35 @@ spotless {
 
 allprojects {
     group = "dev.vriege.render3dfw"
-    version = providers.gradleProperty("mod_version").get()
+    version = providers.gradleProperty("releaseVersion").orElse(providers.gradleProperty("mod_version")).get()
+}
+
+tasks.named("check") {
+    dependsOn("spotlessCheck")
+    dependsOn(subprojects.map { it.tasks.matching { task -> task.name == "check" } })
 }
 
 subprojects {
+    pluginManager.withPlugin("maven-publish") {
+        extensions.configure<PublishingExtension> {
+            repositories {
+                maven {
+                    name = "GitHubPackages"
+                    url = uri("https://maven.pkg.github.com/melon-trick/Render3D")
+                    credentials {
+                        username = providers.environmentVariable("GITHUB_ACTOR").orNull
+                        password = providers.environmentVariable("GITHUB_TOKEN").orNull
+                    }
+                }
+                maven {
+                    name = "Validation"
+                    url = uri(providers.gradleProperty("validationRepository")
+                        .orElse(rootProject.layout.buildDirectory.dir("repository").map { it.asFile.toURI().toString() }).get())
+                }
+            }
+        }
+    }
+
     pluginManager.withPlugin("java") {
         extensions.configure<JavaPluginExtension> {
             sourceCompatibility = JavaVersion.VERSION_25

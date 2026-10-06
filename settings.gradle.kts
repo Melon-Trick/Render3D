@@ -15,3 +15,4 @@ rootProject.name = "Render3DFW"
 
 include("render3dfw-api")
 include("render3dfw-engine")
+include("render3dfw-bom")
